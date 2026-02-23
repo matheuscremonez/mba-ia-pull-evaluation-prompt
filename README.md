@@ -312,6 +312,212 @@ python src/evaluate.py
 
 ---
 
+## Técnicas Aplicadas (Fase 2)
+
+### 1. Role Prompting
+
+**Técnica escolhida:** Definição explícita de persona no `system_prompt`.
+
+**Por que escolhi:**
+- A tarefa exige transformar bug report em artefato de produto (User Story), não apenas "resumir" texto.
+- Uma persona de **Product Manager sênior** melhora consistência de tom, foco em valor e estrutura.
+- Ajuda diretamente nas métricas de **Tone Score** e **User Story Format Score**.
+
+**Como apliquei na prática:**
+- Defini a persona como PM sênior especializado em User Stories.
+- Reforcei que a saída deve ser em **pt-BR**, em **Markdown** e orientada a valor.
+- Adicionei regras para manter linguagem positiva e centrada no usuário.
+
+### 2. Few-shot Learning
+
+**Técnica escolhida:** Inclusão de exemplos de entrada/saída no `system_prompt` e metadados do YAML.
+
+**Por que escolhi:**
+- Few-shot melhora aderência ao formato esperado ("Como..., eu quero..., para que...").
+- Ajuda o modelo a produzir critérios de aceitação mais específicos e testáveis.
+- Reduz ambiguidade em bugs simples e médios.
+
+**Como apliquei na prática:**
+- Incluí 2 exemplos resumidos:
+  - validação de e-mail (bug simples)
+  - webhook de pagamento (bug com contexto técnico)
+- Ambos mostram:
+  - formato de User Story
+  - critérios em estilo Dado/Quando/Então
+  - uso de Contexto Técnico quando necessário
+
+### 3. Skeleton of Thought (estrutura guiada)
+
+**Técnica escolhida:** Guia estrutural de raciocínio (sem exigir exposição de CoT).
+
+**Por que escolhi:**
+- O desafio pede estrutura e tratamento de edge cases.
+- Uma sequência curta de passos internos aumenta a completude sem forçar cadeia de raciocínio explícita na saída.
+- Ajuda nas métricas de **Completeness Score** e **Acceptance Criteria Score**.
+
+**Como apliquei na prática:**
+- Adicionei um "guia de raciocínio" interno com etapas:
+  - identificar persona afetada
+  - identificar ação/benefício
+  - extrair comportamentos testáveis
+  - verificar edge cases e contexto técnico
+  - estruturar saída final em Markdown
+- Combinei isso com regras explícitas de seções:
+  - Título
+  - Descrição
+  - Critérios de Aceitação
+  - Contexto Técnico (quando aplicável)
+  - Edge Cases (quando aplicável)
+  - Tasks Técnicas Sugeridas (bugs complexos)
+
+### Edge Cases e regras explícitas adicionadas
+
+- Inferir persona quando o bug não especifica claramente o usuário.
+- Consolidar múltiplos problemas em uma user story principal com cobertura nos critérios.
+- Incluir contexto técnico e tasks sugeridas para bugs complexos (integração, performance, segurança).
+- Evitar placeholders pendentes e frases vagas como "deve funcionar bem".
+
+---
+
+## Resultados Finais
+
+### Prompt publicado no LangSmith Hub
+
+- Prompt otimizado (Hub): `matheuscremonez/bug_to_user_story_v2`
+- Link do prompt no Hub: `https://smith.langchain.com/hub/matheuscremonez/bug_to_user_story_v2`
+
+### Resultado de avaliação (iteração aprovada com Gemini free)
+
+Avaliação executada com:
+
+```bash
+MAX_EVAL_EXAMPLES=3 python src/evaluate.py
+```
+
+Resultado obtido:
+
+- **Tone Score:** `0.96`
+- **Acceptance Criteria Score:** `0.94`
+- **User Story Format Score:** `0.97`
+- **Completeness Score:** `0.94`
+- **Média Geral:** `0.9533`
+- **Status:** `APROVADO`
+
+### Tabela comparativa (v1 vs v2)
+
+| Aspecto | Prompt v1 (ruim) | Prompt v2 (otimizado) |
+|---|---|---|
+| Persona | Genérica ("assistente") | Product Manager sênior |
+| Formato de saída | Implícito e pouco restritivo | Markdown + seções obrigatórias |
+| User Story padrão | Não reforçado | Estrutura "Como / Eu quero / Para que" explícita |
+| Critérios de aceitação | Não estruturados | Regras de especificidade + estilo Dado/Quando/Então |
+| Few-shot | Não possui | 2 exemplos incluídos |
+| Edge cases | Não possui | Regras para persona ausente, bugs múltiplos e bugs complexos |
+| Contexto técnico | Pouco/nenhum tratamento | Preservação de logs/endpoints/impacto quando aplicável |
+| Metadados de técnicas | Não possui | `role-prompting`, `few-shot-learning`, `skeleton-of-thought` |
+
+### Observação sobre cota do Gemini (free tier)
+
+- A avaliação completa do dataset exige muitas chamadas (geração + 4 avaliações por exemplo).
+- Com `gemini-2.5-flash` no plano gratuito, a execução completa pode exceder a cota diária e retornar **429 ResourceExhausted**.
+- Para iteração rápida e validação do prompt, foi usada avaliação parcial com `MAX_EVAL_EXAMPLES=3`, mantendo as métricas acima de `0.9`.
+
+### Screenshots (adicionar na entrega)
+
+![Prompt publicado no LangSmith Hub](docs/images/langsmith-hub-prompt.png)
+
+![Avaliação aprovada no terminal (MAX_EVAL_EXAMPLES=3)](docs/images/evaluate-max3-terminal.png)
+
+---
+
+## Como Executar
+
+### Pré-requisitos
+
+- Python `3.9+` (recomendado `3.10+` por compatibilidade futura com libs Google)
+- Conta no LangSmith
+- API Key do LangSmith
+- API Key de um provider de LLM:
+  - OpenAI (`gpt-4o-mini` / `gpt-4o`) **ou**
+  - Google Gemini (`gemini-2.5-flash`)
+
+### Configuração do ambiente
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+### Configuração do `.env`
+
+Exemplo mínimo com Gemini:
+
+```env
+LANGSMITH_TRACING=true
+LANGSMITH_ENDPOINT=https://api.smith.langchain.com
+LANGSMITH_API_KEY=SEU_LANGSMITH_API_KEY
+LANGSMITH_PROJECT=mba-ia-pull-evaluation
+USERNAME_LANGSMITH_HUB=matheuscremonez
+
+GOOGLE_API_KEY=SUA_GOOGLE_API_KEY
+LLM_PROVIDER=google
+LLM_MODEL=gemini-2.5-flash
+EVAL_MODEL=gemini-2.5-flash
+```
+
+### 1. Executar pull do prompt base
+
+```bash
+python src/pull_prompts.py
+```
+
+### 2. Validar testes do prompt otimizado
+
+```bash
+python -m pytest tests/test_prompts.py -q
+```
+
+### 3. Fazer push do prompt otimizado para o LangSmith Hub
+
+```bash
+python src/push_prompts.py
+```
+
+Depois, valide no Hub:
+- buscar `matheuscremonez/bug_to_user_story_v2`
+- confirmar visibilidade pública
+
+### 4. Executar avaliação (modo econômico para Gemini free)
+
+```bash
+MAX_EVAL_EXAMPLES=3 python src/evaluate.py
+```
+
+### 5. Executar avaliação completa (quando houver cota disponível)
+
+```bash
+python src/evaluate.py
+```
+
+### 6. Iterar até atingir o critério mínimo
+
+Repita o ciclo:
+
+```bash
+python src/push_prompts.py
+MAX_EVAL_EXAMPLES=3 python src/evaluate.py
+```
+
+Meta:
+- `Tone Score >= 0.9`
+- `Acceptance Criteria Score >= 0.9`
+- `User Story Format Score >= 0.9`
+- `Completeness Score >= 0.9`
+- média das 4 métricas `>= 0.9`
+
+---
+
 ## Dicas Finais
 
 - **Lembre-se da importância da especificidade, contexto e persona** ao refatorar prompts
